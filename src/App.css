@@ -316,7 +316,9 @@ body {
 .document-container {
   position: relative;
   box-shadow: var(--shadow-lg);
-  display: inline-block;
+  display: block;
+  width: 100%;
+  margin: 0 auto;
   background: white;
   /* Base is white so PDF or HTML is visible */
 }

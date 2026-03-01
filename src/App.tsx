@@ -210,9 +210,11 @@ function App() {
     canvas.isDrawingMode = activeTool === 'pen' || activeTool === 'eraser';
 
     if (activeTool === 'pen') {
-      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-      canvas.freeDrawingBrush.color = currentColor;
-      canvas.freeDrawingBrush.width = strokeWidth;
+      const brush = new fabric.PencilBrush(canvas);
+      brush.color = currentColor;
+      brush.width = strokeWidth;
+      brush.decimate = 2; // Drastically simplifies strokes for zero lag
+      canvas.freeDrawingBrush = brush;
     } else if (activeTool === 'eraser') {
       // Fabric doesn't have a native eraser brush that deletes objects easily in free draw mode without a custom plugin,
       // but we can either draw with "white" or implement object deletion on click.
@@ -310,14 +312,26 @@ function App() {
       canvas.on('mouse:up', (function () {
         isDrawing = false;
         shape?.setCoords();
+        saveCurrentPageDrawing();
       }) as any);
     }
+
+    // Save drawing paths automatically on free draw end
+    canvas.on('path:created', () => {
+      saveCurrentPageDrawing();
+    });
+    // Save on object modifications
+    canvas.on('object:modified', () => {
+      saveCurrentPageDrawing();
+    });
 
     // Cleanup listeners
     return () => {
       canvas.off('mouse:down');
       canvas.off('mouse:move');
       canvas.off('mouse:up');
+      canvas.off('path:created');
+      canvas.off('object:modified');
     }
 
   }, [activeTool, currentColor, strokeWidth, fileType]);
