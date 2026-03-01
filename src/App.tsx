@@ -95,12 +95,36 @@ function App() {
 
   const loadHtml = async (htmlFile: File) => {
     const text = await htmlFile.text();
-    // Use DOMPurify to fiercely sanitize HTML to prevent XSS and malicious scripts
+    // We use DOMPurify to fiercely sanitize HTML (stripping out raw JS/XSS)
+    // but we use WHOLE_DOCUMENT to preserve <style>, <head>, giving it the original CSS look.
     const cleanHtml = DOMPurify.sanitize(text, {
-      ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'pre', 'span', 'blockquote'],
-      ALLOWED_ATTR: ['href', 'target', 'style', 'class']
+      WHOLE_DOCUMENT: true,
+      ADD_TAGS: ['style', 'link', 'meta', 'head', 'base']
     });
     setHtmlContent(cleanHtml);
+  };
+
+  const handleIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement, Event>) => {
+    const iframe = e.currentTarget;
+    if (iframe.contentWindow) {
+      // Small delay ensures the browser has rendered the inner CSS fully before we measure
+      setTimeout(() => {
+        try {
+          const doc = iframe.contentWindow!.document;
+          const height = Math.max(800, doc.documentElement.scrollHeight, doc.body.scrollHeight);
+          iframe.style.height = `${height}px`;
+
+          if (fabricRef.current && pdfContainerRef.current) {
+            const containerWidth = pdfContainerRef.current.clientWidth - 40;
+            fabricRef.current.setHeight(height);
+            fabricRef.current.setWidth(containerWidth);
+            fabricRef.current.renderAll();
+          }
+        } catch (err) {
+          console.error("Iframe sandbox prevented resizing:", err);
+        }
+      }, 150);
+    }
   };
 
   // Render PDF page whenever currentPage or pdfDocument changes
@@ -142,12 +166,7 @@ function App() {
             });
           }
         }
-      } else if (fileType === 'html' && pdfContainerRef.current && fabricRef.current) {
-        // Auto resize fabric for HTML
-        const containerHeight = Math.max(500, pdfContainerRef.current.scrollHeight);
-        const containerWidth = pdfContainerRef.current.clientWidth - 40;
-        fabricRef.current.setWidth(containerWidth);
-        fabricRef.current.setHeight(containerHeight);
+        // Resize logic for HTML is now handled seamlessly inside handleIframeLoad
       }
     };
 
@@ -442,7 +461,14 @@ function App() {
                 <canvas ref={pdfCanvasRef} className="pdf-layer" />
               )}
               {fileType === 'html' && (
-                <div className="html-layer" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+                <iframe
+                  className="html-layer"
+                  srcDoc={htmlContent}
+                  title="Uploaded HTML Document"
+                  sandbox="allow-same-origin"
+                  scrolling="no"
+                  onLoad={handleIframeLoad}
+                />
               )}
 
               {/* Drawing Overlay */}
