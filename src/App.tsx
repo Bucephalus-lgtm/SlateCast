@@ -107,15 +107,25 @@ function App() {
   const handleIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement, Event>) => {
     const iframe = e.currentTarget;
     if (iframe.contentWindow) {
-      // Small delay ensures the browser has rendered the inner CSS fully before we measure
       setTimeout(() => {
         try {
           const doc = iframe.contentWindow!.document;
-          const height = Math.max(800, doc.documentElement.scrollHeight, doc.body.scrollHeight);
+          doc.documentElement.style.overflowX = 'hidden';
+
+          const containerWidth = pdfContainerRef.current ? pdfContainerRef.current.clientWidth - 40 : 800;
+          let height = Math.max(800, doc.documentElement.scrollHeight, doc.body.scrollHeight);
+          const scrollWidth = doc.documentElement.scrollWidth;
+
+          if (scrollWidth > containerWidth) {
+            const scale = containerWidth / scrollWidth;
+            doc.body.style.transform = `scale(${scale})`;
+            doc.body.style.transformOrigin = '0 0';
+            height = height * scale;
+          }
+
           iframe.style.height = `${height}px`;
 
-          if (fabricRef.current && pdfContainerRef.current) {
-            const containerWidth = pdfContainerRef.current.clientWidth - 40;
+          if (fabricRef.current) {
             fabricRef.current.setHeight(height);
             fabricRef.current.setWidth(containerWidth);
             fabricRef.current.renderAll();
@@ -212,7 +222,6 @@ function App() {
       canvas.on('mouse:down', ((options: any) => {
         if (activeTool === 'eraser' && options.target) {
           canvas.remove(options.target);
-          saveCurrentPageDrawing();
         }
       }) as any);
       // Change cursor
@@ -301,26 +310,14 @@ function App() {
       canvas.on('mouse:up', (function () {
         isDrawing = false;
         shape?.setCoords();
-        saveCurrentPageDrawing();
       }) as any);
     }
-
-    // Save drawing paths automatically on free draw end
-    canvas.on('path:created', () => {
-      saveCurrentPageDrawing();
-    });
-    // Save on object modifications
-    canvas.on('object:modified', () => {
-      saveCurrentPageDrawing();
-    });
 
     // Cleanup listeners
     return () => {
       canvas.off('mouse:down');
       canvas.off('mouse:move');
       canvas.off('mouse:up');
-      canvas.off('path:created');
-      canvas.off('object:modified');
     }
 
   }, [activeTool, currentColor, strokeWidth, fileType]);
